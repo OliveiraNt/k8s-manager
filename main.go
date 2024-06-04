@@ -11,6 +11,7 @@ type model struct {
 	context         context
 	namespace       namespace
 	pod             pods
+	log             log
 	currentView     string
 	namespaceChange chan string
 }
@@ -32,6 +33,9 @@ func newModel() model {
 			sub:  make(chan struct{}),
 			pods: buildPodsTable(),
 			help: help.New(),
+		},
+		log: log{
+			sub: make(chan string),
 		},
 		namespaceChange: make(chan string),
 	}
@@ -61,9 +65,11 @@ func main() {
 }
 
 func (m model) Init() tea.Cmd {
-	return waitForActivity(m.pod.sub)
+	return tea.Batch(
+		waitForActivity(m.pod.sub),
+		waitForLogActivity(m.log.logChan),
+	)
 }
-
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		k := msg.String()
@@ -78,6 +84,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return UpdateNamespace(m, msg)
 	case "pod":
 		return UpdatePod(m, msg)
+	case "log":
+		return UpdateLog(m, msg)
 	}
 	return m, nil
 }
@@ -90,6 +98,8 @@ func (m model) View() string {
 		return podsView(m)
 	case "context":
 		return contextView(m)
+	case "log":
+		return logView(m)
 	default:
 		panic("unknown view")
 	}

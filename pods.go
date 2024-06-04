@@ -40,6 +40,15 @@ func UpdatePod(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "c":
 			m.currentView = "context"
 			return m, nil
+		case "enter":
+			row := m.pod.pods.SelectedRow()
+			m.log.pod = row[0]
+			m.log.logChan = make(chan string)
+			m.currentView = "log"
+			go getPodLogs(m.namespace.selectedNamespace, m.log.pod, m.log.logChan)
+			go logEventRoutine(m)
+			return m, waitForLogActivity(m.log.sub)
+
 		}
 	case podsEvents:
 		m = refreshPods(m)
@@ -111,4 +120,13 @@ func refreshPods(m model) model {
 	m.pod.pods.SetRows(rows)
 
 	return m
+}
+
+func logEventRoutine(m model) {
+	for {
+		select {
+		case event := <-m.log.logChan:
+			m.log.sub <- event
+		}
+	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	goContext "context"
 	"flag"
 	"fmt"
@@ -136,27 +137,43 @@ func getNamespaces() []v1.Namespace {
 }
 
 // Get pod container logs
-func getPodContainerLogs(namespace string, p string, c string, o io.Writer) error {
+func getPodLogs(namespace string, p string, logChan chan<- string) error {
 	tl := int64(50)
 	cs := getClientSet()
 
 	opts := &v1.PodLogOptions{
-		Container: c,
-		TailLines: &tl,
+		InsecureSkipTLSVerifyBackend: true,
+		TailLines:                    &tl,
+		Follow:                       true, // Follow the log stream of the pod
 	}
 
 	req := cs.CoreV1().Pods(namespace).GetLogs(p, opts)
 
 	readCloser, err := req.Stream(goContext.TODO())
 	if err != nil {
+		errMsg := fmt.Errorf("errMsg in opening stream: %v", err)
+		fmt.Println(errMsg)
 		return err
 	}
 
-	_, err = io.Copy(o, readCloser)
+	reader := bufio.NewReader(readCloser)
+
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return err
+		}
+
+		if err == io.EOF {
+			break
+		}
+
+		logChan <- line
+	}
 
 	readCloser.Close()
 
-	return err
+	return nil
 }
 
 // Column helper: Restarts
