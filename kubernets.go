@@ -64,7 +64,8 @@ func getClientSet() *kubernetes.Clientset {
 func listContexts() map[string]*api.Context {
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
 
 	return config.Contexts
@@ -73,7 +74,8 @@ func listContexts() map[string]*api.Context {
 func getCurrent() (string, string) {
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
 	currentContext := config.CurrentContext
 	currentNs := config.Contexts[currentContext].Namespace
@@ -85,7 +87,8 @@ func setContext(clusterName string, namespace string, usr string) {
 
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
 	ctx := api.NewContext()
 	ctx.Cluster = clusterName
@@ -107,7 +110,8 @@ func getPods(namespace string) []v1.Pod {
 
 	pds, err := cs.CoreV1().Pods(namespace).List(goContext.TODO(), metav1.ListOptions{})
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
 	return pds.Items
 }
@@ -117,7 +121,8 @@ func watchPods(namespace string) <-chan watch.Event {
 
 	w, err := cs.CoreV1().Pods(namespace).Watch(goContext.TODO(), metav1.ListOptions{})
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		os.Exit(1)
 	}
 
 	return w.ResultChan()
@@ -130,7 +135,8 @@ func getNamespaces() []v1.Namespace {
 
 	ns, err := cs.CoreV1().Namespaces().List(goContext.TODO(), metav1.ListOptions{})
 	if err != nil {
-		panic(err)
+		fmt.Println(err.Error())
+		os.Exit(1)
 
 	}
 	return ns.Items
@@ -171,7 +177,11 @@ func getPodLogs(namespace string, p string, logChan chan<- string) error {
 		logChan <- line
 	}
 
-	readCloser.Close()
+	err = readCloser.Close()
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
 
 	return nil
 }

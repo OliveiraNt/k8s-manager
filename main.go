@@ -59,6 +59,10 @@ func main() {
 	}()
 
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+		close(m.namespaceChange)
+		close(m.log.sub)
+		close(m.pod.sub)
+		close(m.log.logChan)
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
 	}
