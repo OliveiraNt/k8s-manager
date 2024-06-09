@@ -1,4 +1,4 @@
-package main
+package pods
 
 import "github.com/charmbracelet/bubbles/key"
 
@@ -9,7 +9,7 @@ type KeyMap struct {
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Namespace, k.Context}
+	return []key.Binding{k.Namespace, k.Context, k.Logs}
 
 }
 
@@ -27,5 +27,9 @@ var keys = KeyMap{
 	Namespace: key.NewBinding(
 		key.WithKeys("n"),
 		key.WithHelp("n", "namespace"),
+	),
+	Logs: key.NewBinding(
+		key.WithKeys("enter"),
+		key.WithHelp("enter", "logs"),
 	),
 }

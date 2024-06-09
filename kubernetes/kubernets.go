@@ -1,4 +1,4 @@
-package main
+package kubernetes
 
 import (
 	"bufio"
@@ -61,7 +61,7 @@ func getClientSet() *kubernetes.Clientset {
 	return cs
 }
 
-func listContexts() map[string]*api.Context {
+func ListContexts() map[string]*api.Context {
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -71,19 +71,20 @@ func listContexts() map[string]*api.Context {
 	return config.Contexts
 }
 
-func getCurrent() (string, string) {
+func GetCurrent() (string, string, string) {
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
 	}
-	currentContext := config.CurrentContext
-	currentNs := config.Contexts[currentContext].Namespace
+	name := config.CurrentContext
+	namespace := config.Contexts[name].Namespace
+	user := config.Contexts[name].AuthInfo
 
-	return currentContext, currentNs
+	return name, namespace, user
 }
 
-func setContext(clusterName string, namespace string, usr string) {
+func SetContext(clusterName string, namespace string, usr string) {
 
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
@@ -104,8 +105,8 @@ func setContext(clusterName string, namespace string, usr string) {
 	}
 }
 
-// Get pods (use namespace)
-func getPods(namespace string) []v1.Pod {
+// GetPods Get pods (use namespace)
+func GetPods(namespace string) []v1.Pod {
 	cs := getClientSet()
 
 	pds, err := cs.CoreV1().Pods(namespace).List(goContext.TODO(), metav1.ListOptions{})
@@ -116,7 +117,7 @@ func getPods(namespace string) []v1.Pod {
 	return pds.Items
 }
 
-func watchPods(namespace string) <-chan watch.Event {
+func WatchPods(namespace string) <-chan watch.Event {
 	cs := getClientSet()
 
 	w, err := cs.CoreV1().Pods(namespace).Watch(goContext.TODO(), metav1.ListOptions{})
@@ -130,7 +131,7 @@ func watchPods(namespace string) <-chan watch.Event {
 }
 
 // Get namespaces
-func getNamespaces() []v1.Namespace {
+func GetNamespaces() []v1.Namespace {
 	cs := getClientSet()
 
 	ns, err := cs.CoreV1().Namespaces().List(goContext.TODO(), metav1.ListOptions{})
@@ -187,7 +188,7 @@ func getPodLogs(namespace string, p string, logChan chan<- string) error {
 }
 
 // Column helper: Restarts
-func columnHelperRestarts(cs []v1.ContainerStatus) string {
+func ColumnHelperRestarts(cs []v1.ContainerStatus) string {
 	r := 0
 	for _, c := range cs {
 		r = r + int(c.RestartCount)
@@ -196,7 +197,7 @@ func columnHelperRestarts(cs []v1.ContainerStatus) string {
 }
 
 // Column helper: Age
-func columnHelperAge(t metav1.Time) string {
+func ColumnHelperAge(t metav1.Time) string {
 	d := time.Now().Sub(t.Time)
 
 	if d.Hours() > 1 {
@@ -216,12 +217,12 @@ func columnHelperAge(t metav1.Time) string {
 }
 
 // Column helper: Status
-func columnHelperStatus(s v1.PodStatus) string {
+func ColumnHelperStatus(s v1.PodStatus) string {
 	return fmt.Sprintf("%s", s.Phase)
 }
 
 // Column helper: Ready
-func columnHelperReady(cs []v1.ContainerStatus) string {
+func ColumnHelperReady(cs []v1.ContainerStatus) string {
 	cr := 0
 	for _, c := range cs {
 		if c.Ready {
