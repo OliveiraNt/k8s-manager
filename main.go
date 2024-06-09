@@ -57,71 +57,26 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch keypress := msg.String(); keypress {
-		case "q", "ctrl+c":
+
+	// Handle quit keys regardless of the message type
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		if keypress := keyMsg.String(); keypress == "q" || keypress == "ctrl+c" {
 			return m, tea.Quit
 		}
+	}
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
 		switch m.currentView {
 		case Pod:
-			switch keypress := msg.String(); keypress {
-			case "c":
-				m.currentView = Context
-			case "n":
-				m.currentView = Namespace
-			default:
-				var podModel tea.Model
-				podModel, cmd = m.pod.Update(msg)
-				if pod, ok := podModel.(pods.Model); ok {
-					m.pod = pod
-				}
-			}
+			m.updatePodView(msg, &cmd)
 		case Context:
-			var contextModel tea.Model
-			switch keypress := msg.String(); keypress {
-			case "esc":
-				m.currentView = Pod
-			case "enter":
-				contextModel, cmd = m.context.Update(msg)
-				if ctx, ok := contextModel.(context.Model); ok {
-					m.context = ctx
-					ns := m.context.SelectedContext.Namespace
-					if ns == "" {
-						ns = "default"
-					}
-					m.namespace = namespace.New(ns)
-					m.pod.Namespace = ns
-					pods.RefreshPods(&m.pod)
-					m.currentView = Pod
-				}
-			default:
-				contextModel, cmd = m.context.Update(msg)
-				if ctx, ok := contextModel.(context.Model); ok {
-					m.context = ctx
-				}
-			}
+			m.updateContextView(msg, &cmd)
 		case Namespace:
-			var namespaceModel tea.Model
-			switch keypress := msg.String(); keypress {
-			case "esc":
-				m.currentView = Pod
-			case "enter":
-				namespaceModel, cmd = m.namespace.Update(msg)
-				if ns, ok := namespaceModel.(namespace.Model); ok {
-					m.namespace = ns
-					m.pod.Namespace = m.namespace.SelectedNamespace
-					pods.RefreshPods(&m.pod)
-					m.currentView = Pod
-				}
-			default:
-				namespaceModel, cmd = m.namespace.Update(msg)
-				if ns, ok := namespaceModel.(namespace.Model); ok {
-					m.namespace = ns
-				}
-			}
+			m.updateNamespaceView(msg, &cmd)
 		}
 	default:
+		// Handle other message types
 		switch m.currentView {
 		case Pod:
 			var podModel tea.Model
@@ -130,20 +85,99 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pod = pod
 			}
 		case Context:
-			var contextModel tea.Model
-			contextModel, cmd = m.context.Update(msg)
-			if ctx, ok := contextModel.(context.Model); ok {
+			var ctxModel tea.Model
+			ctxModel, cmd = m.context.Update(msg)
+			if ctx, ok := ctxModel.(context.Model); ok {
 				m.context = ctx
 			}
 		case Namespace:
-			var namespaceModel tea.Model
-			namespaceModel, cmd = m.namespace.Update(msg)
-			if ns, ok := namespaceModel.(namespace.Model); ok {
+			var nsModel tea.Model
+			nsModel, cmd = m.namespace.Update(msg)
+			if ns, ok := nsModel.(namespace.Model); ok {
 				m.namespace = ns
 			}
 		}
 	}
+
 	return m, cmd
+}
+
+func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
+	keypress := msg.(tea.KeyMsg).String()
+	switch keypress {
+	case "c":
+		m.currentView = Context
+	case "n":
+		m.currentView = Namespace
+	default:
+		var podModel tea.Model
+		var c tea.Cmd
+		podModel, c = m.pod.Update(msg)
+		cmd = &c
+		if pod, ok := podModel.(pods.Model); ok {
+			m.pod = pod
+		}
+	}
+}
+
+func (m *model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
+	keypress := msg.(tea.KeyMsg).String()
+	switch keypress {
+	case "esc":
+		m.currentView = Pod
+	case "enter":
+		var ctxModel tea.Model
+		var c tea.Cmd
+		ctxModel, c = m.context.Update(msg)
+		cmd = &c
+		if ctx, ok := ctxModel.(context.Model); ok {
+			m.context = ctx
+			ns := m.context.SelectedContext.Namespace
+			if ns == "" {
+				ns = "default"
+			}
+			m.namespace = namespace.New(ns)
+			m.pod.Namespace = ns
+			pods.RefreshPods(&m.pod)
+			m.currentView = Pod
+		}
+	default:
+		var ctxModel tea.Model
+		var c tea.Cmd
+		ctxModel, c = m.context.Update(msg)
+		cmd = &c
+		if ctx, ok := ctxModel.(context.Model); ok {
+			m.context = ctx
+		}
+	}
+}
+
+func (m *model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
+	keypress := msg.(tea.KeyMsg).String()
+	switch keypress {
+	case "esc":
+		m.currentView = Pod
+	case "enter":
+		var nsModel tea.Model
+		var c tea.Cmd
+		nsModel, c = m.namespace.Update(msg)
+		cmd = &c
+		if ns, ok := nsModel.(namespace.Model); ok {
+			m.namespace = ns
+			m.pod.Namespace = m.namespace.SelectedNamespace
+			pods.RefreshPods(&m.pod)
+			m.currentView = Pod
+		}
+
+	default:
+		var nsModel tea.Model
+		var c tea.Cmd
+		nsModel, c = m.namespace.Update(msg)
+		cmd = &c
+		if ns, ok := nsModel.(namespace.Model); ok {
+			m.namespace = ns
+		}
+	}
 }
 
 func (m model) View() string {
