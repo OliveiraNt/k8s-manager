@@ -7,6 +7,7 @@ import (
 	"k8s-manager/kubernetes"
 	"k8s-manager/namespace"
 	"k8s-manager/pods"
+	"k8s.io/apimachinery/pkg/watch"
 	"os"
 	"strings"
 )
@@ -24,6 +25,7 @@ type model struct {
 	context   context.Model
 	namespace namespace.Model
 	pod       pods.Model
+	watch     watch.Interface
 	//log             log
 	currentView Views
 }
@@ -38,6 +40,7 @@ func newModel() model {
 		context:     context.New(),
 		pod:         pods.New(ns),
 		namespace:   namespace.New(ns),
+		watch:       kubernetes.WatchPods(ns),
 	}
 	return m
 }
@@ -51,8 +54,17 @@ func main() {
 	}
 }
 
+func watchPodEvents(sub <-chan watch.Event) tea.Cmd {
+	return func() tea.Msg {
+		return pods.ChangeMsg(<-sub)
+	}
+}
+func watchPods(ns string) watch.Interface {
+	return kubernetes.WatchPods(ns)
+}
+
 func (m model) Init() tea.Cmd {
-	return nil
+	return watchPodEvents(m.watch.ResultChan())
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -76,7 +88,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateNamespaceView(msg, &cmd)
 		default:
 		}
-	case context.ChangeContextMsg:
+	case context.ChangeMsg:
+		m.watch.Stop()
 		var ctxModel tea.Model
 		ctxModel, cmd = m.context.Update(msg)
 		if ctx, ok := ctxModel.(context.Model); ok {
@@ -88,9 +101,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.namespace = namespace.New(ns)
 			m.pod.Namespace = ns
-			pods.RefreshPods(&m.pod)
+			pods.RefreshPods(&m.pod, true)
+			m.watch = watchPods(ns)
+			cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
 			m.currentView = Pod
 		}
+	case pods.ChangeMsg:
+		switch m.currentView {
+		case Pod:
+			var podModel tea.Model
+			podModel, cmd = m.pod.Update(msg)
+			if pod, ok := podModel.(pods.Model); ok {
+				m.pod = pod
+			}
+		}
+		cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
 
 	default:
 		// Handle other message types
@@ -166,6 +191,7 @@ func (m *model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 	case "esc":
 		m.currentView = Pod
 	case "enter":
+		m.watch.Stop()
 		var nsModel tea.Model
 		var c tea.Cmd
 		nsModel, c = m.namespace.Update(msg)
@@ -173,7 +199,9 @@ func (m *model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 		if ns, ok := nsModel.(namespace.Model); ok {
 			m.namespace = ns
 			m.pod.Namespace = m.namespace.SelectedNamespace
-			pods.RefreshPods(&m.pod)
+			pods.RefreshPods(&m.pod, true)
+			m.watch = watchPods(m.namespace.SelectedNamespace)
+			*cmd = tea.Batch(*cmd, watchPodEvents(m.watch.ResultChan()))
 			m.currentView = Pod
 		}
 

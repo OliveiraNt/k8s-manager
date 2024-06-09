@@ -12,7 +12,7 @@ type Model struct {
 	ShowLoadingText bool
 }
 
-type ChangeContextMsg struct{}
+type ChangeMsg struct{}
 
 func New() Model {
 	name, namespace, user := kubernetes.GetCurrent()
@@ -36,11 +36,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keypress := msg.String(); keypress {
 		case "enter":
 			m.ShowLoadingText = true
-			cmd = func() tea.Msg { return ChangeContextMsg{} }
+			cmd = func() tea.Msg { return ChangeMsg{} }
 		default:
 			m.Contexts, cmd = m.Contexts.Update(msg)
 		}
-	case ChangeContextMsg:
+	case ChangeMsg:
 		i, ok := m.Contexts.SelectedItem().(Item)
 		if ok {
 			m.SelectedContext = i

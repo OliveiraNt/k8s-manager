@@ -117,7 +117,7 @@ func GetPods(namespace string) []v1.Pod {
 	return pds.Items
 }
 
-func WatchPods(namespace string) <-chan watch.Event {
+func WatchPods(namespace string) watch.Interface {
 	cs := getClientSet()
 
 	w, err := cs.CoreV1().Pods(namespace).Watch(goContext.TODO(), metav1.ListOptions{})
@@ -126,11 +126,11 @@ func WatchPods(namespace string) <-chan watch.Event {
 		os.Exit(1)
 	}
 
-	return w.ResultChan()
+	return w
 
 }
 
-// Get namespaces
+// GetNamespaces Get namespaces
 func GetNamespaces() []v1.Namespace {
 	cs := getClientSet()
 
@@ -187,7 +187,7 @@ func getPodLogs(namespace string, p string, logChan chan<- string) error {
 	return nil
 }
 
-// Column helper: Restarts
+// ColumnHelperRestarts Column helper: Restarts
 func ColumnHelperRestarts(cs []v1.ContainerStatus) string {
 	r := 0
 	for _, c := range cs {
@@ -196,7 +196,7 @@ func ColumnHelperRestarts(cs []v1.ContainerStatus) string {
 	return strconv.Itoa(r)
 }
 
-// Column helper: Age
+// ColumnHelperAge Column helper: Age
 func ColumnHelperAge(t metav1.Time) string {
 	d := time.Now().Sub(t.Time)
 
@@ -216,12 +216,12 @@ func ColumnHelperAge(t metav1.Time) string {
 	return "?"
 }
 
-// Column helper: Status
+// ColumnHelperStatus Column helper: Status
 func ColumnHelperStatus(s v1.PodStatus) string {
 	return fmt.Sprintf("%s", s.Phase)
 }
 
-// Column helper: Ready
+// ColumnHelperReady Column helper: Ready
 func ColumnHelperReady(cs []v1.ContainerStatus) string {
 	cr := 0
 	for _, c := range cs {

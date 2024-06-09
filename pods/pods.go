@@ -14,15 +14,10 @@ type Model struct {
 	Pods      table.Model
 	Help      help.Model
 }
-type podsChangeEvents watch.Event
+type ChangeMsg watch.Event
 
-//	func waitForActivity(sub <-chan watch.Event) tea.Cmd {
-//		return func() tea.Msg {
-//			return podsChangeEvents(<-sub)
-//		}
-//	}
 func (m Model) Init() tea.Cmd {
-	return nil //waitForActivity(kubernetes.WatchPods(m.Namespace))
+	return nil
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -38,9 +33,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 			m.Pods, cmd = m.Pods.Update(msg)
 		}
-	case podsChangeEvents:
-		//m = m.RefreshPods()
-		//cmd = waitForActivity(kubernetes.WatchPods(m.Namespace))
+	case ChangeMsg:
+		RefreshPods(&m, false)
 	}
 	return m, cmd
 
@@ -50,7 +44,7 @@ func (m Model) View() string {
 	return m.Pods.View() + helpStyle.Render(m.Help.View(keys))
 }
 
-func RefreshPods(m *Model) {
+func RefreshPods(m *Model, goTop bool) {
 	var rows []table.Row
 	pds := kubernetes.GetPods(m.Namespace)
 	for _, p := range pds {
@@ -64,7 +58,9 @@ func RefreshPods(m *Model) {
 		rows = append(rows, row)
 	}
 	m.Pods.SetRows(rows)
-	m.Pods.GotoTop()
+	if goTop {
+		m.Pods.GotoTop()
+	}
 }
 
 func New(namespace string) Model {
@@ -98,6 +94,6 @@ func New(namespace string) Model {
 		Pods:      t,
 		Help:      help.New(),
 	}
-	RefreshPods(&m)
+	RefreshPods(&m, true)
 	return m
 }
