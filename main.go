@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	context "k8s-manager/context"
+	"k8s-manager/context"
 	"k8s-manager/kubernetes"
 	"k8s-manager/namespace"
 	"k8s-manager/pods"
@@ -17,7 +17,7 @@ const (
 	Context Views = iota
 	Namespace
 	Pod
-	Log
+	//Log
 )
 
 type model struct {
@@ -74,7 +74,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateContextView(msg, &cmd)
 		case Namespace:
 			m.updateNamespaceView(msg, &cmd)
+		default:
 		}
+	case context.ChangeContextMsg:
+		var ctxModel tea.Model
+		ctxModel, cmd = m.context.Update(msg)
+		if ctx, ok := ctxModel.(context.Model); ok {
+			m.context = ctx
+			m.context.ShowLoadingText = false
+			ns := m.context.SelectedContext.Namespace
+			if ns == "" {
+				ns = "default"
+			}
+			m.namespace = namespace.New(ns)
+			m.pod.Namespace = ns
+			pods.RefreshPods(&m.pod)
+			m.currentView = Pod
+		}
+
 	default:
 		// Handle other message types
 		switch m.currentView {
@@ -96,6 +113,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ns, ok := nsModel.(namespace.Model); ok {
 				m.namespace = ns
 			}
+		default:
 		}
 	}
 
@@ -113,7 +131,7 @@ func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 		var podModel tea.Model
 		var c tea.Cmd
 		podModel, c = m.pod.Update(msg)
-		cmd = &c
+		*cmd = c
 		if pod, ok := podModel.(pods.Model); ok {
 			m.pod = pod
 		}
@@ -122,30 +140,20 @@ func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 
 func (m *model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
 	keypress := msg.(tea.KeyMsg).String()
+	var ctxModel tea.Model
+	var c tea.Cmd
 	switch keypress {
 	case "esc":
 		m.currentView = Pod
 	case "enter":
-		var ctxModel tea.Model
-		var c tea.Cmd
 		ctxModel, c = m.context.Update(msg)
-		cmd = &c
+		*cmd = c
 		if ctx, ok := ctxModel.(context.Model); ok {
 			m.context = ctx
-			ns := m.context.SelectedContext.Namespace
-			if ns == "" {
-				ns = "default"
-			}
-			m.namespace = namespace.New(ns)
-			m.pod.Namespace = ns
-			pods.RefreshPods(&m.pod)
-			m.currentView = Pod
 		}
 	default:
-		var ctxModel tea.Model
-		var c tea.Cmd
 		ctxModel, c = m.context.Update(msg)
-		cmd = &c
+		*cmd = c
 		if ctx, ok := ctxModel.(context.Model); ok {
 			m.context = ctx
 		}
@@ -161,7 +169,7 @@ func (m *model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 		var nsModel tea.Model
 		var c tea.Cmd
 		nsModel, c = m.namespace.Update(msg)
-		cmd = &c
+		*cmd = c
 		if ns, ok := nsModel.(namespace.Model); ok {
 			m.namespace = ns
 			m.pod.Namespace = m.namespace.SelectedNamespace
@@ -173,7 +181,7 @@ func (m *model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 		var nsModel tea.Model
 		var c tea.Cmd
 		nsModel, c = m.namespace.Update(msg)
-		cmd = &c
+		*cmd = c
 		if ns, ok := nsModel.(namespace.Model); ok {
 			m.namespace = ns
 		}
@@ -182,8 +190,8 @@ func (m *model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 
 func (m model) View() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "CONTEXT: %s\n", m.context.SelectedContext.Name)
-	fmt.Fprintf(&b, "NAMESPACE: %s\n", m.pod.Namespace)
+	_, _ = fmt.Fprintf(&b, "CONTEXT: %s\n", m.context.SelectedContext.Name)
+	_, _ = fmt.Fprintf(&b, "NAMESPACE: %s\n", m.pod.Namespace)
 	s := titleStyle.Render(b.String()) + "\n\n"
 	switch m.currentView {
 	case Pod:

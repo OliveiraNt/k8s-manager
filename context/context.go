@@ -9,7 +9,10 @@ import (
 type Model struct {
 	Contexts        list.Model
 	SelectedContext Item
+	ShowLoadingText bool
 }
+
+type ChangeContextMsg struct{}
 
 func New() Model {
 	name, namespace, user := kubernetes.GetCurrent()
@@ -32,16 +35,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch keypress := msg.String(); keypress {
 		case "enter":
-			cmd = m.Contexts.ToggleSpinner()
-			i, ok := m.Contexts.SelectedItem().(Item)
-			if ok {
-				m.SelectedContext = i
-				kubernetes.SetContext(i.Name, i.Namespace, i.User)
-			}
+			m.ShowLoadingText = true
+			cmd = func() tea.Msg { return ChangeContextMsg{} }
 		default:
 			m.Contexts, cmd = m.Contexts.Update(msg)
 		}
-
+	case ChangeContextMsg:
+		i, ok := m.Contexts.SelectedItem().(Item)
+		if ok {
+			m.SelectedContext = i
+			kubernetes.SetContext(i.Name, i.Namespace, i.User)
+		}
 	default:
 		m.Contexts, cmd = m.Contexts.Update(msg)
 	}
@@ -50,6 +54,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) View() string {
+	if m.ShowLoadingText {
+		return "\nLoading..."
+
+	}
 	return "\n" + m.Contexts.View()
 }
 
