@@ -1,9 +1,9 @@
 package context
 
 import (
+	"github.com/OliveiraNt/k8s-manager/kubernetes"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
-	"k8s-manager/kubernetes"
 )
 
 type Model struct {

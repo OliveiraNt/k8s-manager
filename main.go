@@ -2,11 +2,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/OliveiraNt/k8s-manager/context"
+	"github.com/OliveiraNt/k8s-manager/kubernetes"
+	"github.com/OliveiraNt/k8s-manager/namespace"
+	"github.com/OliveiraNt/k8s-manager/pods"
 	tea "github.com/charmbracelet/bubbletea"
-	"k8s-manager/context"
-	"k8s-manager/kubernetes"
-	"k8s-manager/namespace"
-	"k8s-manager/pods"
 	"k8s.io/apimachinery/pkg/watch"
 	"os"
 	"strings"

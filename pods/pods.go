@@ -1,11 +1,11 @@
 package pods
 
 import (
+	"github.com/OliveiraNt/k8s-manager/kubernetes"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"k8s-manager/kubernetes"
 	"k8s.io/apimachinery/pkg/watch"
 )
 
