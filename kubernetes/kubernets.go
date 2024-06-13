@@ -2,7 +2,7 @@ package kubernetes
 
 import (
 	"bufio"
-	goContext "context"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -109,7 +109,7 @@ func SetContext(clusterName string, namespace string, usr string) {
 func GetPods(namespace string) []v1.Pod {
 	cs := getClientSet()
 
-	pds, err := cs.CoreV1().Pods(namespace).List(goContext.TODO(), metav1.ListOptions{})
+	pds, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
@@ -120,7 +120,7 @@ func GetPods(namespace string) []v1.Pod {
 func WatchPods(namespace string) watch.Interface {
 	cs := getClientSet()
 
-	w, err := cs.CoreV1().Pods(namespace).Watch(goContext.TODO(), metav1.ListOptions{})
+	w, err := cs.CoreV1().Pods(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
@@ -134,7 +134,7 @@ func WatchPods(namespace string) watch.Interface {
 func GetNamespaces() []v1.Namespace {
 	cs := getClientSet()
 
-	ns, err := cs.CoreV1().Namespaces().List(goContext.TODO(), metav1.ListOptions{})
+	ns, err := cs.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		fmt.Println(err.Error())
 		os.Exit(1)
@@ -144,7 +144,7 @@ func GetNamespaces() []v1.Namespace {
 }
 
 // Get pod container logs
-func GetPodLogs(namespace string, p string, logChan chan<- string) error {
+func GetPodLogs(ctx context.Context, namespace string, p string, logChan chan<- string) error {
 	tl := int64(50)
 	cs := getClientSet()
 
@@ -156,7 +156,7 @@ func GetPodLogs(namespace string, p string, logChan chan<- string) error {
 
 	req := cs.CoreV1().Pods(namespace).GetLogs(p, opts)
 
-	readCloser, err := req.Stream(goContext.TODO())
+	readCloser, err := req.Stream(ctx)
 	if err != nil {
 		errMsg := fmt.Errorf("errMsg in opening stream: %v", err)
 		fmt.Println(errMsg)
@@ -175,7 +175,11 @@ func GetPodLogs(namespace string, p string, logChan chan<- string) error {
 			break
 		}
 
-		logChan <- line
+		select {
+		case logChan <- line:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	return readCloser.Close()

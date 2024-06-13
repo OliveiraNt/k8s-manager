@@ -29,6 +29,8 @@ type model struct {
 	watch       watch.Interface
 	log         logs.Model
 	currentView Views
+	width       int
+	height      int
 }
 
 func newModel() model {
@@ -60,6 +62,7 @@ func watchPodEvents(sub <-chan watch.Event) tea.Cmd {
 		return pods.ChangeMsg(<-sub)
 	}
 }
+
 func watchPods(ns string) watch.Interface {
 	return kubernetes.WatchPods(ns)
 }
@@ -80,6 +83,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		cmd = handleOtherMsgTypes(m, cmd, msg)
 	case tea.KeyMsg:
 		switch m.currentView {
 		case Pod:
@@ -88,6 +95,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateContextView(msg, &cmd)
 		case Namespace:
 			m.updateNamespaceView(msg, &cmd)
+		case Log:
+			m.updateLogView(msg, &cmd)
 		default:
 		}
 	case context.ChangeMsg:
@@ -118,7 +127,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
-	case logs.ChangeMsg:
+	case logs.NewLogMsg:
 		switch m.currentView {
 		case Log:
 			var logModel tea.Model
@@ -129,30 +138,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	default:
 		// Handle other message types
-		switch m.currentView {
-		case Pod:
-			var podModel tea.Model
-			podModel, cmd = m.pod.Update(msg)
-			if pod, ok := podModel.(pods.Model); ok {
-				m.pod = pod
-			}
-		case Context:
-			var ctxModel tea.Model
-			ctxModel, cmd = m.context.Update(msg)
-			if ctx, ok := ctxModel.(context.Model); ok {
-				m.context = ctx
-			}
-		case Namespace:
-			var nsModel tea.Model
-			nsModel, cmd = m.namespace.Update(msg)
-			if ns, ok := nsModel.(namespace.Model); ok {
-				m.namespace = ns
-			}
-		default:
-		}
+		cmd = handleOtherMsgTypes(m, cmd, msg)
 	}
 
 	return m, cmd
+}
+
+func handleOtherMsgTypes(m model, cmd tea.Cmd, msg tea.Msg) tea.Cmd {
+	switch m.currentView {
+	case Pod:
+		var podModel tea.Model
+		podModel, cmd = m.pod.Update(msg)
+		if pod, ok := podModel.(pods.Model); ok {
+			m.pod = pod
+		}
+	case Log:
+		var logModel tea.Model
+		logModel, cmd = m.log.Update(msg)
+		if log, ok := logModel.(logs.Model); ok {
+			m.log = log
+		}
+	case Context:
+		var ctxModel tea.Model
+		ctxModel, cmd = m.context.Update(msg)
+		if ctx, ok := ctxModel.(context.Model); ok {
+			m.context = ctx
+		}
+	case Namespace:
+		var nsModel tea.Model
+		nsModel, cmd = m.namespace.Update(msg)
+		if ns, ok := nsModel.(namespace.Model); ok {
+			m.namespace = ns
+		}
+	default:
+	}
+	return cmd
 }
 
 func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
@@ -163,7 +183,8 @@ func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 	case "n":
 		m.currentView = Namespace
 	case "enter":
-		m.log = logs.New(m.pod.Pods.SelectedRow()[0], m.namespace.SelectedNamespace)
+		m.log = logs.New(m.pod.Pods.SelectedRow()[0], m.namespace.SelectedNamespace, m.width, m.height)
+		*cmd = logs.WatchLogs(m.log)
 		m.currentView = Log
 	default:
 		var podModel tea.Model
@@ -180,13 +201,7 @@ func (m *model) updateLogView(msg tea.Msg, cmd *tea.Cmd) {
 	keypress := msg.(tea.KeyMsg).String()
 	switch keypress {
 	case "esc":
-		var logModel tea.Model
-		var c tea.Cmd
-		logModel, c = m.log.Update(msg)
-		*cmd = c
-		if log, ok := logModel.(logs.Model); ok {
-			m.log = log
-		}
+		m.log.Stop()
 		m.currentView = Pod
 	default:
 		var logModel tea.Model
@@ -197,8 +212,8 @@ func (m *model) updateLogView(msg tea.Msg, cmd *tea.Cmd) {
 			m.log = log
 		}
 	}
-
 }
+
 func (m *model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
 	keypress := msg.(tea.KeyMsg).String()
 	var ctxModel tea.Model
@@ -264,6 +279,8 @@ func (m model) View() string {
 		return m.context.View()
 	case Namespace:
 		return m.namespace.View()
+	case Log:
+		return m.log.View()
 	default:
 		return s
 	}

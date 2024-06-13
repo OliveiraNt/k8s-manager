@@ -1,6 +1,7 @@
 package logs
 
 import (
+	"context"
 	"github.com/OliveiraNt/k8s-manager/kubernetes"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,28 +14,42 @@ type Model struct {
 	pod       string
 	namespace string
 	ready     bool
-	logsChan  chan<- string
+	ctx       context.Context
+	cancel    context.CancelFunc
+	logChan   chan string
 }
 
-type ChangeMsg string
+type NewLogMsg string
 
-func New(pod string, namespace string) Model {
-	logsChan := make(chan string)
-	go watchLogs(pod, namespace, logsChan)
-	return Model{
+func New(pod string, namespace string, width int, height int) Model {
+	ctx, cancel := context.WithCancel(context.Background())
+	logChan := make(chan string)
+	vp := viewport.New(width, height)
+	m := Model{
 		pod:       pod,
 		namespace: namespace,
 		ready:     false,
 		buffer:    []string{},
-		logsChan:  logsChan,
+		ctx:       ctx,
+		cancel:    cancel,
+		logChan:   logChan,
+		logs:      vp,
+	}
+	go kubernetes.GetPodLogs(ctx, namespace, pod, logChan)
+	return m
+}
+
+func WatchLogs(m Model) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case log := <-m.logChan:
+			return NewLogMsg(log)
+		}
 	}
 }
 
-func watchLogs(pod string, namespace string, logsChan chan<- string) {
-	err := kubernetes.GetPodLogs(namespace, pod, logsChan)
-	if err != nil {
-		return
-	}
+func (m Model) Stop() {
+	m.cancel()
 }
 
 func (m Model) Init() tea.Cmd {
@@ -47,34 +62,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds []tea.Cmd
 	)
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
-			close(m.logsChan)
-			m.buffer = []string{}
-		}
 	case tea.WindowSizeMsg:
-		if !m.ready {
-			m.logs = viewport.New(msg.Width, msg.Height)
-			m.ready = true
-		} else {
-			m.logs.Width = msg.Width
-			m.logs.Height = msg.Height
-			cmd = viewport.Sync(m.logs)
-		}
-	case ChangeMsg:
-		scrollDown := false
-		if m.logs.AtBottom() {
-			scrollDown = true
-		}
-
-		m.buffer = append(m.buffer, "")
-
-		m.logs.SetContent(strings.Join(m.buffer, "\n"))
-		if scrollDown {
-			m.logs.GotoBottom()
-		}
-
+		m.logs.Width = msg.Width
+		m.logs.Height = msg.Height
+		m.logs.SetContent(strings.Join(m.buffer, ""))
+	case NewLogMsg:
+		m.buffer = append(m.buffer, string(msg))
+		m.logs.SetContent(strings.Join(m.buffer, ""))
+		cmds = append(cmds, WatchLogs(m))
 	}
 
 	m.logs, cmd = m.logs.Update(msg)
@@ -86,62 +81,3 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) View() string {
 	return m.logs.View()
 }
-
-//type log struct {
-//	pod     string
-//	log     string
-//	logChan chan string
-//	sub     chan string
-//	buffer  []string
-//	index   int
-//}
-//
-//type logEvents struct {
-//	event string
-//}
-//
-//func waitForLogActivity(sub chan string) tea.Cmd {
-//	return func() tea.Msg {
-//		return logEvents{<-sub}
-//	}
-//}
-//
-//func UpdateLog(m model, msg tea.Msg) (tea.Model, tea.Cmd) {
-//	switch msg := msg.(type) {
-//	case tea.KeyMsg:
-//		switch keypress := msg.String(); keypress {
-//		case "q", "ctrl+c":
-//			return m, tea.Quit
-//		case "esc":
-//			close(m.log.logChan)
-//			m.log = log{sub: make(chan string)}
-//			m.currentView = "pod"
-//			return m, nil
-//		case "up": // scroll up
-//			if m.log.index > 0 {
-//				m.log.index--
-//			}
-//		case "down": // scroll down
-//			if m.log.index < len(m.log.buffer)-1 {
-//				m.log.index++
-//			}
-//		}
-//	case logEvents:
-//		m.log.log += msg.event
-//		m.log.buffer = append(m.log.buffer, msg.event)
-//		return m, waitForLogActivity(m.log.sub)
-//	}
-//	return m, nil
-//}
-//
-//func logView(m model) string {
-//	if len(m.log.buffer) == 0 {
-//		return ""
-//	}
-//	start := m.log.index
-//	end := start + 50
-//	if end > len(m.log.buffer) {
-//		end = len(m.log.buffer)
-//	}
-//	return strings.Join(m.log.buffer[start:end], "\n")
-//}
