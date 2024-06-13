@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/OliveiraNt/k8s-manager/context"
 	"github.com/OliveiraNt/k8s-manager/kubernetes"
+	"github.com/OliveiraNt/k8s-manager/logs"
 	"github.com/OliveiraNt/k8s-manager/namespace"
 	"github.com/OliveiraNt/k8s-manager/pods"
 	tea "github.com/charmbracelet/bubbletea"
@@ -18,15 +19,15 @@ const (
 	Context Views = iota
 	Namespace
 	Pod
-	//Log
+	Log
 )
 
 type model struct {
-	context   context.Model
-	namespace namespace.Model
-	pod       pods.Model
-	watch     watch.Interface
-	//log             log
+	context     context.Model
+	namespace   namespace.Model
+	pod         pods.Model
+	watch       watch.Interface
+	log         logs.Model
 	currentView Views
 }
 
@@ -68,6 +69,7 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+
 	var cmd tea.Cmd
 
 	// Handle quit keys regardless of the message type
@@ -116,7 +118,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
-
+	case logs.ChangeMsg:
+		switch m.currentView {
+		case Log:
+			var logModel tea.Model
+			logModel, cmd = m.log.Update(msg)
+			if log, ok := logModel.(logs.Model); ok {
+				m.log = log
+			}
+		}
 	default:
 		// Handle other message types
 		switch m.currentView {
@@ -152,6 +162,9 @@ func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 		m.currentView = Context
 	case "n":
 		m.currentView = Namespace
+	case "enter":
+		m.log = logs.New(m.pod.Pods.SelectedRow()[0], m.namespace.SelectedNamespace)
+		m.currentView = Log
 	default:
 		var podModel tea.Model
 		var c tea.Cmd
@@ -163,6 +176,29 @@ func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 	}
 }
 
+func (m *model) updateLogView(msg tea.Msg, cmd *tea.Cmd) {
+	keypress := msg.(tea.KeyMsg).String()
+	switch keypress {
+	case "esc":
+		var logModel tea.Model
+		var c tea.Cmd
+		logModel, c = m.log.Update(msg)
+		*cmd = c
+		if log, ok := logModel.(logs.Model); ok {
+			m.log = log
+		}
+		m.currentView = Pod
+	default:
+		var logModel tea.Model
+		var c tea.Cmd
+		logModel, c = m.log.Update(msg)
+		*cmd = c
+		if log, ok := logModel.(logs.Model); ok {
+			m.log = log
+		}
+	}
+
+}
 func (m *model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
 	keypress := msg.(tea.KeyMsg).String()
 	var ctxModel tea.Model

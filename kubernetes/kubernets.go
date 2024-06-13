@@ -144,7 +144,7 @@ func GetNamespaces() []v1.Namespace {
 }
 
 // Get pod container logs
-func getPodLogs(namespace string, p string, logChan chan<- string) error {
+func GetPodLogs(namespace string, p string, logChan chan<- string) error {
 	tl := int64(50)
 	cs := getClientSet()
 
@@ -178,13 +178,7 @@ func getPodLogs(namespace string, p string, logChan chan<- string) error {
 		logChan <- line
 	}
 
-	err = readCloser.Close()
-	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
-	}
-
-	return nil
+	return readCloser.Close()
 }
 
 // ColumnHelperRestarts Column helper: Restarts
