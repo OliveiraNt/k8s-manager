@@ -5,7 +5,7 @@ K8s Manager is a command line application written in Go that allows the user to 
 ## Requirements
 
 - Go 1.22.0 or higher
-- Access to a Kubernetes cluster and a valid kubeconfig configuration file
+- Access to a Kubernetes cluster and a valid kubeconfig (client v1.29) configuration file
 
 ## Dependencies
 
