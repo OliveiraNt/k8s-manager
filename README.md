@@ -13,7 +13,7 @@ The following Go libraries are used in this project:
 
 - github.com/charmbracelet/bubbles v0.18.0
 - github.com/charmbracelet/bubbletea v0.26.4
-- github.com/charmbracelet/lipgloss v0.9.1
+- github.com/charmbracelet/lipgloss v0.11.0
 - k8s.io/api v0.30.1
 - k8s.io/apimachinery v0.30.1
 - k8s.io/client-go v0.30.1

@@ -133,8 +133,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case Log:
 			var logModel tea.Model
 			logModel, cmd = m.log.Update(msg)
-			if log, ok := logModel.(logs.Model); ok {
-				m.log = log
+			if logM, ok := logModel.(logs.Model); ok {
+				m.log = logM
 			}
 		default:
 		}
@@ -157,8 +157,8 @@ func handleOtherMsgTypes(m model, cmd tea.Cmd, msg tea.Msg) tea.Cmd {
 	case Log:
 		var logModel tea.Model
 		logModel, cmd = m.log.Update(msg)
-		if log, ok := logModel.(logs.Model); ok {
-			m.log = log
+		if logM, ok := logModel.(logs.Model); ok {
+			m.log = logM
 		}
 	case Context:
 		var ctxModel tea.Model
@@ -217,8 +217,8 @@ func (m *model) updateLogView(msg tea.Msg, cmd *tea.Cmd) {
 		var c tea.Cmd
 		logModel, c = m.log.Update(msg)
 		*cmd = c
-		if log, ok := logModel.(logs.Model); ok {
-			m.log = log
+		if logM, ok := logModel.(logs.Model); ok {
+			m.log = logM
 		}
 	}
 }
