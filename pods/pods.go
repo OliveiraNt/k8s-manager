@@ -1,6 +1,7 @@
 package pods
 
 import (
+	"context"
 	"github.com/OliveiraNt/k8s-manager/kubernetes"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
@@ -46,7 +47,12 @@ func (m Model) View() string {
 
 func RefreshPods(m *Model, goTop bool) {
 	var rows []table.Row
-	pds := kubernetes.GetPods(m.Namespace)
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	pds, err := kubernetes.GetPods(ctx, m.Namespace)
+	if err != nil {
+		panic(err)
+	}
 	for _, p := range pds {
 		row := table.Row{
 			p.Name,

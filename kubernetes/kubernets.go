@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/util/homedir"
-	"log"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -47,13 +46,13 @@ func getClientSet() *kubernetes.Clientset {
 	// Use the current context in kubeconfig
 	cc, err := clientcmd.BuildConfigFromFlags("", *kubeConfig)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	// Create the client set
 	cs, err := kubernetes.NewForConfig(cc)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	return cs
@@ -62,7 +61,7 @@ func getClientSet() *kubernetes.Clientset {
 func ListContexts() map[string]*api.Context {
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
 	return config.Contexts
@@ -71,7 +70,7 @@ func ListContexts() map[string]*api.Context {
 func GetCurrent() (string, string, string) {
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	name := config.CurrentContext
 	namespace := config.Contexts[name].Namespace
@@ -84,7 +83,7 @@ func SetContext(clusterName string, namespace string, usr string) {
 
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 	ctx := api.NewContext()
 	ctx.Cluster = clusterName
@@ -96,43 +95,42 @@ func SetContext(clusterName string, namespace string, usr string) {
 
 	err = clientcmd.WriteToFile(*config, *kubeConfig)
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
 // GetPods Get pods (use namespace)
-func GetPods(namespace string) []v1.Pod {
+func GetPods(ctx context.Context, namespace string) ([]v1.Pod, error) {
 	cs := getClientSet()
 
-	pds, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
+	pds, err := cs.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
-	return pds.Items
+	return pds.Items, nil
 }
 
-func WatchPods(namespace string) watch.Interface {
+func WatchPods(ctx context.Context, namespace string) (watch.Interface, error) {
 	cs := getClientSet()
 
-	w, err := cs.CoreV1().Pods(namespace).Watch(context.TODO(), metav1.ListOptions{})
+	w, err := cs.CoreV1().Pods(namespace).Watch(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
-	return w
+	return w, nil
 
 }
 
 // GetNamespaces Get namespaces
-func GetNamespaces() []v1.Namespace {
+func GetNamespaces(ctx context.Context) ([]v1.Namespace, error) {
 	cs := getClientSet()
 
-	ns, err := cs.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
+	ns, err := cs.CoreV1().Namespaces().List(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Fatal(err)
-
+		return nil, err
 	}
-	return ns.Items
+	return ns.Items, nil
 }
 
 // GetPodLogs Get pod container logs

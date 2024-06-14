@@ -1,6 +1,7 @@
 package namespace
 
 import (
+	"context"
 	"github.com/OliveiraNt/k8s-manager/kubernetes"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
@@ -52,7 +53,13 @@ func New(ns string) Model {
 
 func buildNamespacesList() list.Model {
 	var items []list.Item
-	ns := kubernetes.GetNamespaces()
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	namespaces, err := kubernetes.GetNamespaces(ctx)
+	if err != nil {
+		panic(err.Error())
+	}
+	ns := namespaces
 	for _, n := range ns {
 		items = append(items, item{name: n.Name})
 	}

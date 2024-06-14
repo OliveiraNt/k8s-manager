@@ -10,7 +10,6 @@ import (
 	"github.com/OliveiraNt/k8s-manager/pods"
 	tea "github.com/charmbracelet/bubbletea"
 	"k8s.io/apimachinery/pkg/watch"
-	"log"
 	"strings"
 )
 
@@ -39,12 +38,18 @@ func newModel() model {
 	if ns == "" {
 		ns = "default"
 	}
+	c, cancelFunc := ctx.WithCancel(ctx.Background())
+	defer cancelFunc()
+	w, err := kubernetes.WatchPods(c, ns)
+	if err != nil {
+		panic(err)
+	}
 	m := model{
 		currentView: Pod,
 		context:     context.New(),
 		pod:         pods.New(ns),
 		namespace:   namespace.New(ns),
-		watch:       kubernetes.WatchPods(ns),
+		watch:       w,
 	}
 	return m
 }
@@ -53,7 +58,7 @@ func main() {
 	m := newModel()
 
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 }
 
@@ -64,7 +69,13 @@ func watchPodEvents(sub <-chan watch.Event) tea.Cmd {
 }
 
 func watchPods(ns string) watch.Interface {
-	return kubernetes.WatchPods(ns)
+	c, cancelFunc := ctx.WithCancel(ctx.Background())
+	defer cancelFunc()
+	w, err := kubernetes.WatchPods(c, ns)
+	if err != nil {
+		panic(err)
+	}
+	return w
 }
 
 func (m model) Init() tea.Cmd {
