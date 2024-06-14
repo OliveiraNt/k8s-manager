@@ -47,7 +47,7 @@ release:
   mode: append
   header: |
     ## k8s-manager ({{ .Date }})
-  name_template: "{{.ProjectName}}-v{{.Version}} {{.Env.USER}}"
+  name_template: "{{.ProjectName}}-v{{.Version}}"
   disable: false
   skip_upload: false
   include_meta: true
