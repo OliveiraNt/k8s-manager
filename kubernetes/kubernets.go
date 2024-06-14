@@ -9,7 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/clientcmd/api"
 	"k8s.io/client-go/util/homedir"
-	"os"
+	"log"
 	"path/filepath"
 	"strconv"
 	"time"
@@ -47,15 +47,13 @@ func getClientSet() *kubernetes.Clientset {
 	// Use the current context in kubeconfig
 	cc, err := clientcmd.BuildConfigFromFlags("", *kubeConfig)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	// Create the client set
 	cs, err := kubernetes.NewForConfig(cc)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	return cs
@@ -64,8 +62,7 @@ func getClientSet() *kubernetes.Clientset {
 func ListContexts() map[string]*api.Context {
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	return config.Contexts
@@ -74,8 +71,7 @@ func ListContexts() map[string]*api.Context {
 func GetCurrent() (string, string, string) {
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 	}
 	name := config.CurrentContext
 	namespace := config.Contexts[name].Namespace
@@ -88,8 +84,7 @@ func SetContext(clusterName string, namespace string, usr string) {
 
 	config, err := clientcmd.LoadFromFile(*kubeConfig)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 	}
 	ctx := api.NewContext()
 	ctx.Cluster = clusterName
@@ -101,7 +96,7 @@ func SetContext(clusterName string, namespace string, usr string) {
 
 	err = clientcmd.WriteToFile(*config, *kubeConfig)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 }
 
@@ -111,8 +106,7 @@ func GetPods(namespace string) []v1.Pod {
 
 	pds, err := cs.CoreV1().Pods(namespace).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 	}
 	return pds.Items
 }
@@ -122,8 +116,7 @@ func WatchPods(namespace string) watch.Interface {
 
 	w, err := cs.CoreV1().Pods(namespace).Watch(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 	}
 
 	return w
@@ -136,14 +129,13 @@ func GetNamespaces() []v1.Namespace {
 
 	ns, err := cs.CoreV1().Namespaces().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		log.Fatal(err)
 
 	}
 	return ns.Items
 }
 
-// Get pod container logs
+// GetPodLogs Get pod container logs
 func GetPodLogs(ctx context.Context, namespace string, p string, logChan chan<- string) error {
 	tl := int64(50)
 	cs := getClientSet()

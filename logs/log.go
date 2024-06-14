@@ -2,47 +2,39 @@ package logs
 
 import (
 	"context"
-	"github.com/OliveiraNt/k8s-manager/kubernetes"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"strings"
 )
 
 type Model struct {
-	logs      viewport.Model
-	buffer    []string
-	pod       string
-	namespace string
-	ready     bool
-	ctx       context.Context
-	cancel    context.CancelFunc
-	logChan   chan string
+	logs    viewport.Model
+	buffer  []string
+	Ctx     context.Context
+	cancel  context.CancelFunc
+	LogChan chan string
 }
 
 type NewLogMsg string
 
-func New(pod string, namespace string, width int, height int) Model {
-	ctx, cancel := context.WithCancel(context.Background())
+func New(c context.Context, width int, height int) Model {
+	ctx, cancel := context.WithCancel(c)
 	logChan := make(chan string)
 	vp := viewport.New(width, height)
 	m := Model{
-		pod:       pod,
-		namespace: namespace,
-		ready:     false,
-		buffer:    []string{},
-		ctx:       ctx,
-		cancel:    cancel,
-		logChan:   logChan,
-		logs:      vp,
+		buffer:  []string{},
+		Ctx:     ctx,
+		cancel:  cancel,
+		LogChan: logChan,
+		logs:    vp,
 	}
-	go kubernetes.GetPodLogs(ctx, namespace, pod, logChan)
 	return m
 }
 
 func WatchLogs(m Model) tea.Cmd {
 	return func() tea.Msg {
 		select {
-		case log := <-m.logChan:
+		case log := <-m.LogChan:
 			return NewLogMsg(log)
 		}
 	}
@@ -67,9 +59,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logs.Height = msg.Height
 		m.logs.SetContent(strings.Join(m.buffer, ""))
 	case NewLogMsg:
+		gob := false
+		if m.logs.AtBottom() {
+			gob = true
+		}
 		m.buffer = append(m.buffer, string(msg))
 		m.logs.SetContent(strings.Join(m.buffer, ""))
 		cmds = append(cmds, WatchLogs(m))
+		if gob {
+			m.logs.GotoBottom()
+		}
+
 	}
 
 	m.logs, cmd = m.logs.Update(msg)

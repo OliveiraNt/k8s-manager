@@ -1,6 +1,7 @@
 package main
 
 import (
+	ctx "context"
 	"fmt"
 	"github.com/OliveiraNt/k8s-manager/context"
 	"github.com/OliveiraNt/k8s-manager/kubernetes"
@@ -9,7 +10,7 @@ import (
 	"github.com/OliveiraNt/k8s-manager/pods"
 	tea "github.com/charmbracelet/bubbletea"
 	"k8s.io/apimachinery/pkg/watch"
-	"os"
+	"log"
 	"strings"
 )
 
@@ -52,8 +53,7 @@ func main() {
 	m := newModel()
 
 	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
-		fmt.Println("Error running program:", err)
-		os.Exit(1)
+		log.Fatal(err)
 	}
 }
 
@@ -103,8 +103,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.watch.Stop()
 		var ctxModel tea.Model
 		ctxModel, cmd = m.context.Update(msg)
-		if ctx, ok := ctxModel.(context.Model); ok {
-			m.context = ctx
+		if ctxM, ok := ctxModel.(context.Model); ok {
+			m.context = ctxM
 			m.context.ShowLoadingText = false
 			ns := m.context.SelectedContext.Namespace
 			if ns == "" {
@@ -125,6 +125,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if pod, ok := podModel.(pods.Model); ok {
 				m.pod = pod
 			}
+		default:
 		}
 		cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
 	case logs.NewLogMsg:
@@ -135,6 +136,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if log, ok := logModel.(logs.Model); ok {
 				m.log = log
 			}
+		default:
 		}
 	default:
 		// Handle other message types
@@ -161,8 +163,8 @@ func handleOtherMsgTypes(m model, cmd tea.Cmd, msg tea.Msg) tea.Cmd {
 	case Context:
 		var ctxModel tea.Model
 		ctxModel, cmd = m.context.Update(msg)
-		if ctx, ok := ctxModel.(context.Model); ok {
-			m.context = ctx
+		if ctxM, ok := ctxModel.(context.Model); ok {
+			m.context = ctxM
 		}
 	case Namespace:
 		var nsModel tea.Model
@@ -183,7 +185,14 @@ func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 	case "n":
 		m.currentView = Namespace
 	case "enter":
-		m.log = logs.New(m.pod.Pods.SelectedRow()[0], m.namespace.SelectedNamespace, m.width, m.height)
+		m.log = logs.New(ctx.Background(), m.width, m.height)
+		go func() {
+			_ = kubernetes.GetPodLogs(
+				m.log.Ctx,
+				m.namespace.SelectedNamespace,
+				m.pod.Pods.SelectedRow()[0],
+				m.log.LogChan)
+		}()
 		*cmd = logs.WatchLogs(m.log)
 		m.currentView = Log
 	default:
@@ -224,14 +233,14 @@ func (m *model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
 	case "enter":
 		ctxModel, c = m.context.Update(msg)
 		*cmd = c
-		if ctx, ok := ctxModel.(context.Model); ok {
-			m.context = ctx
+		if ctxM, ok := ctxModel.(context.Model); ok {
+			m.context = ctxM
 		}
 	default:
 		ctxModel, c = m.context.Update(msg)
 		*cmd = c
-		if ctx, ok := ctxModel.(context.Model); ok {
-			m.context = ctx
+		if ctxM, ok := ctxModel.(context.Model); ok {
+			m.context = ctxM
 		}
 	}
 }
