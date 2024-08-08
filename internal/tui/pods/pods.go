@@ -2,7 +2,7 @@ package pods
 
 import (
 	"context"
-	"github.com/OliveiraNt/k8s-manager/kubernetes"
+	"github.com/OliveiraNt/k8s-manager/internal/kubernetes"
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/table"
 	tea "github.com/charmbracelet/bubbletea"

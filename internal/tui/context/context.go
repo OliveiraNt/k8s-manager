@@ -1,7 +1,7 @@
 package context
 
 import (
-	"github.com/OliveiraNt/k8s-manager/kubernetes"
+	"github.com/OliveiraNt/k8s-manager/internal/kubernetes"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )

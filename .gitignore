@@ -5,7 +5,7 @@
 *.so
 *.dylib
 
-# Test binary, built with `go test -c`
+# Test binary, built with "go test -c"
 *.test
 
 # Output of the go coverage tool, specifically when used with LiteIDE
@@ -14,13 +14,17 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# IDEs
-.idea/
-*.iml
-.vscode/
-*.swp
-*.swo
-*.swn
-*.swm
-*.swl
-dist/
+# Go workspace file
+go.work
+tmp/
+
+# IDE specific files
+.vscode
+.idea
+
+# .env file
+.env
+
+# Project build
+main
+*templ.go
