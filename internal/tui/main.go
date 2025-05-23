@@ -1,14 +1,15 @@
-package main
+package tui
 
 import (
 	ctx "context"
 	"fmt"
-	"github.com/OliveiraNt/k8s-manager/context"
-	"github.com/OliveiraNt/k8s-manager/kubernetes"
-	"github.com/OliveiraNt/k8s-manager/logs"
-	"github.com/OliveiraNt/k8s-manager/namespace"
-	"github.com/OliveiraNt/k8s-manager/pods"
+	"github.com/OliveiraNt/k8s-manager/internal/kubernetes"
+	"github.com/OliveiraNt/k8s-manager/internal/tui/context"
+	"github.com/OliveiraNt/k8s-manager/internal/tui/logs"
+	"github.com/OliveiraNt/k8s-manager/internal/tui/namespace"
+	"github.com/OliveiraNt/k8s-manager/internal/tui/pods"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"k8s.io/apimachinery/pkg/watch"
 	"strings"
 )
@@ -22,7 +23,9 @@ const (
 	Log
 )
 
-type model struct {
+var titleStyle = lipgloss.NewStyle().MarginLeft(2).Bold(true)
+
+type Model struct {
 	context     context.Model
 	namespace   namespace.Model
 	pod         pods.Model
@@ -33,7 +36,7 @@ type model struct {
 	height      int
 }
 
-func newModel() model {
+func NewModel() Model {
 	_, ns, _ := kubernetes.GetCurrent()
 	if ns == "" {
 		ns = "default"
@@ -44,7 +47,7 @@ func newModel() model {
 	if err != nil {
 		panic(err)
 	}
-	m := model{
+	m := Model{
 		currentView: Pod,
 		context:     context.New(),
 		pod:         pods.New(ns),
@@ -52,14 +55,6 @@ func newModel() model {
 		watch:       w,
 	}
 	return m
-}
-
-func main() {
-	m := newModel()
-
-	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
-		panic(err)
-	}
 }
 
 func watchPodEvents(sub <-chan watch.Event) tea.Cmd {
@@ -78,11 +73,11 @@ func watchPods(ns string) watch.Interface {
 	return w
 }
 
-func (m model) Init() tea.Cmd {
+func (m Model) Init() tea.Cmd {
 	return watchPodEvents(m.watch.ResultChan())
 }
 
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 
@@ -157,7 +152,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func handleOtherMsgTypes(m model, cmd tea.Cmd, msg tea.Msg) tea.Cmd {
+func handleOtherMsgTypes(m Model, cmd tea.Cmd, msg tea.Msg) tea.Cmd {
 	switch m.currentView {
 	case Pod:
 		var podModel tea.Model
@@ -188,7 +183,7 @@ func handleOtherMsgTypes(m model, cmd tea.Cmd, msg tea.Msg) tea.Cmd {
 	return cmd
 }
 
-func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
+func (m *Model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 	keypress := msg.(tea.KeyMsg).String()
 	switch keypress {
 	case "c":
@@ -217,7 +212,7 @@ func (m *model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 	}
 }
 
-func (m *model) updateLogView(msg tea.Msg, cmd *tea.Cmd) {
+func (m *Model) updateLogView(msg tea.Msg, cmd *tea.Cmd) {
 	keypress := msg.(tea.KeyMsg).String()
 	switch keypress {
 	case "esc":
@@ -234,7 +229,7 @@ func (m *model) updateLogView(msg tea.Msg, cmd *tea.Cmd) {
 	}
 }
 
-func (m *model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
+func (m *Model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
 	keypress := msg.(tea.KeyMsg).String()
 	var ctxModel tea.Model
 	var c tea.Cmd
@@ -256,7 +251,7 @@ func (m *model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
 	}
 }
 
-func (m *model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
+func (m *Model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 	keypress := msg.(tea.KeyMsg).String()
 	switch keypress {
 	case "esc":
@@ -287,7 +282,7 @@ func (m *model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 	}
 }
 
-func (m model) View() string {
+func (m Model) View() string {
 	var b strings.Builder
 	_, _ = fmt.Fprintf(&b, "CONTEXT: %s\n", m.context.SelectedContext.Name)
 	_, _ = fmt.Fprintf(&b, "NAMESPACE: %s\n", m.pod.Namespace)
