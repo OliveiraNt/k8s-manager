@@ -28,4 +28,4 @@ tmp/
 # Project build
 main
 *templ.go
-./dist
+dist/

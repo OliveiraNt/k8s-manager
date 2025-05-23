@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/OliveiraNt/k8s-manager/internal/kubernetes"
 	"github.com/OliveiraNt/k8s-manager/internal/tui/context"
+	"github.com/OliveiraNt/k8s-manager/internal/tui/deployments"
 	"github.com/OliveiraNt/k8s-manager/internal/tui/logs"
 	"github.com/OliveiraNt/k8s-manager/internal/tui/namespace"
 	"github.com/OliveiraNt/k8s-manager/internal/tui/pods"
@@ -20,20 +21,23 @@ const (
 	Context Views = iota
 	Namespace
 	Pod
+	Deployment
 	Log
 )
 
 var titleStyle = lipgloss.NewStyle().MarginLeft(2).Bold(true)
 
 type Model struct {
-	context     context.Model
-	namespace   namespace.Model
-	pod         pods.Model
-	watch       watch.Interface
-	log         logs.Model
-	currentView Views
-	width       int
-	height      int
+	context         context.Model
+	namespace       namespace.Model
+	pod             pods.Model
+	deployment      deployments.Model
+	watch           watch.Interface
+	deploymentWatch watch.Interface
+	log             logs.Model
+	currentView     Views
+	width           int
+	height          int
 }
 
 func NewModel() Model {
@@ -47,12 +51,18 @@ func NewModel() Model {
 	if err != nil {
 		panic(err)
 	}
+	dw, err := kubernetes.WatchDeployments(c, ns)
+	if err != nil {
+		panic(err)
+	}
 	m := Model{
-		currentView: Pod,
-		context:     context.New(),
-		pod:         pods.New(ns),
-		namespace:   namespace.New(ns),
-		watch:       w,
+		currentView:     Pod,
+		context:         context.New(),
+		pod:             pods.New(ns),
+		deployment:      deployments.New(ns),
+		namespace:       namespace.New(ns),
+		watch:           w,
+		deploymentWatch: dw,
 	}
 	return m
 }
@@ -60,6 +70,12 @@ func NewModel() Model {
 func watchPodEvents(sub <-chan watch.Event) tea.Cmd {
 	return func() tea.Msg {
 		return pods.ChangeMsg(<-sub)
+	}
+}
+
+func watchDeploymentEvents(sub <-chan watch.Event) tea.Cmd {
+	return func() tea.Msg {
+		return deployments.ChangeMsg(<-sub)
 	}
 }
 
@@ -73,8 +89,21 @@ func watchPods(ns string) watch.Interface {
 	return w
 }
 
+func watchDeployments(ns string) watch.Interface {
+	c, cancelFunc := ctx.WithCancel(ctx.Background())
+	defer cancelFunc()
+	w, err := kubernetes.WatchDeployments(c, ns)
+	if err != nil {
+		panic(err)
+	}
+	return w
+}
+
 func (m Model) Init() tea.Cmd {
-	return watchPodEvents(m.watch.ResultChan())
+	return tea.Batch(
+		watchPodEvents(m.watch.ResultChan()),
+		watchDeploymentEvents(m.deploymentWatch.ResultChan()),
+	)
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -101,12 +130,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.updateContextView(msg, &cmd)
 		case Namespace:
 			m.updateNamespaceView(msg, &cmd)
+		case Deployment:
+			m.updateDeploymentView(msg, &cmd)
 		case Log:
 			m.updateLogView(msg, &cmd)
 		default:
 		}
 	case context.ChangeMsg:
 		m.watch.Stop()
+		m.deploymentWatch.Stop()
 		var ctxModel tea.Model
 		ctxModel, cmd = m.context.Update(msg)
 		if ctxM, ok := ctxModel.(context.Model); ok {
@@ -118,9 +150,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.namespace = namespace.New(ns)
 			m.pod.Namespace = ns
+			m.deployment.Namespace = ns
 			pods.RefreshPods(&m.pod, true)
+			deployments.RefreshDeployments(&m.deployment, true)
 			m.watch = watchPods(ns)
-			cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
+			m.deploymentWatch = watchDeployments(ns)
+			cmd = tea.Batch(
+				cmd,
+				watchPodEvents(m.watch.ResultChan()),
+				watchDeploymentEvents(m.deploymentWatch.ResultChan()),
+			)
 			m.currentView = Pod
 		}
 	case pods.ChangeMsg:
@@ -134,6 +173,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		default:
 		}
 		cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
+	case deployments.ChangeMsg:
+		switch m.currentView {
+		case Deployment:
+			var depModel tea.Model
+			depModel, cmd = m.deployment.Update(msg)
+			if dep, ok := depModel.(deployments.Model); ok {
+				m.deployment = dep
+			}
+		default:
+		}
+		cmd = tea.Batch(cmd, watchDeploymentEvents(m.deploymentWatch.ResultChan()))
 	case logs.NewLogMsg:
 		switch m.currentView {
 		case Log:
@@ -159,6 +209,12 @@ func handleOtherMsgTypes(m Model, cmd tea.Cmd, msg tea.Msg) tea.Cmd {
 		podModel, cmd = m.pod.Update(msg)
 		if pod, ok := podModel.(pods.Model); ok {
 			m.pod = pod
+		}
+	case Deployment:
+		var depModel tea.Model
+		depModel, cmd = m.deployment.Update(msg)
+		if dep, ok := depModel.(deployments.Model); ok {
+			m.deployment = dep
 		}
 	case Log:
 		var logModel tea.Model
@@ -190,6 +246,8 @@ func (m *Model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 		m.currentView = Context
 	case "n":
 		m.currentView = Namespace
+	case "d":
+		m.currentView = Deployment
 	case "enter":
 		m.log = logs.New(ctx.Background(), m.width, m.height)
 		go func() {
@@ -258,6 +316,7 @@ func (m *Model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 		m.currentView = Pod
 	case "enter":
 		m.watch.Stop()
+		m.deploymentWatch.Stop()
 		var nsModel tea.Model
 		var c tea.Cmd
 		nsModel, c = m.namespace.Update(msg)
@@ -265,9 +324,16 @@ func (m *Model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 		if ns, ok := nsModel.(namespace.Model); ok {
 			m.namespace = ns
 			m.pod.Namespace = m.namespace.SelectedNamespace
+			m.deployment.Namespace = m.namespace.SelectedNamespace
 			pods.RefreshPods(&m.pod, true)
+			deployments.RefreshDeployments(&m.deployment, true)
 			m.watch = watchPods(m.namespace.SelectedNamespace)
-			*cmd = tea.Batch(*cmd, watchPodEvents(m.watch.ResultChan()))
+			m.deploymentWatch = watchDeployments(m.namespace.SelectedNamespace)
+			*cmd = tea.Batch(
+				*cmd,
+				watchPodEvents(m.watch.ResultChan()),
+				watchDeploymentEvents(m.deploymentWatch.ResultChan()),
+			)
 			m.currentView = Pod
 		}
 
@@ -282,6 +348,28 @@ func (m *Model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 	}
 }
 
+func (m *Model) updateDeploymentView(msg tea.Msg, cmd *tea.Cmd) {
+	keypress := msg.(tea.KeyMsg).String()
+	switch keypress {
+	case "esc":
+		m.currentView = Pod
+	case "p":
+		m.currentView = Pod
+	case "c":
+		m.currentView = Context
+	case "n":
+		m.currentView = Namespace
+	default:
+		var depModel tea.Model
+		var c tea.Cmd
+		depModel, c = m.deployment.Update(msg)
+		*cmd = c
+		if dep, ok := depModel.(deployments.Model); ok {
+			m.deployment = dep
+		}
+	}
+}
+
 func (m Model) View() string {
 	var b strings.Builder
 	_, _ = fmt.Fprintf(&b, "CONTEXT: %s\n", m.context.SelectedContext.Name)
@@ -290,6 +378,8 @@ func (m Model) View() string {
 	switch m.currentView {
 	case Pod:
 		return s + m.pod.View()
+	case Deployment:
+		return s + m.deployment.View()
 	case Context:
 		return m.context.View()
 	case Namespace:

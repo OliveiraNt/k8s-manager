@@ -17,6 +17,7 @@ import (
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 	"k8s.io/client-go/tools/clientcmd"
 
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -218,4 +219,32 @@ func ColumnHelperReady(cs []v1.ContainerStatus) string {
 		}
 	}
 	return fmt.Sprintf("%d/%d", cr, len(cs))
+}
+
+// GetDeployments Get deployments in a namespace
+func GetDeployments(ctx context.Context, namespace string) ([]appsv1.Deployment, error) {
+	cs := getClientSet()
+
+	deps, err := cs.AppsV1().Deployments(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return deps.Items, nil
+}
+
+// WatchDeployments Watch deployments in a namespace
+func WatchDeployments(ctx context.Context, namespace string) (watch.Interface, error) {
+	cs := getClientSet()
+
+	w, err := cs.AppsV1().Deployments(namespace).Watch(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	return w, nil
+}
+
+// ColumnHelperReplicas Column helper: Replicas
+func ColumnHelperReplicas(d appsv1.DeploymentStatus) string {
+	return fmt.Sprintf("%d/%d", d.ReadyReplicas, d.Replicas)
 }
