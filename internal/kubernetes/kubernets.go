@@ -135,7 +135,7 @@ func GetNamespaces(ctx context.Context) ([]v1.Namespace, error) {
 
 // GetPodLogs Get pod container logs
 func GetPodLogs(ctx context.Context, namespace string, p string, logChan chan<- string) error {
-	tl := int64(50)
+	tl := int64(1000)
 	cs := getClientSet()
 
 	opts := &v1.PodLogOptions{
