@@ -114,10 +114,14 @@ func watchDeployments(ns string, m Model) watch.Interface {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
-		watchPodEvents(m.watch.ResultChan()),
-		watchDeploymentEvents(m.deploymentWatch.ResultChan()),
-	)
+	switch m.currentView {
+	case Pod:
+		return watchPodEvents(m.watch.ResultChan())
+	case Deployment:
+		return watchDeploymentEvents(m.deploymentWatch.ResultChan())
+	default:
+		return nil
+	}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -179,7 +183,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmd = tea.Batch(
 					cmd,
 					watchPodEvents(m.watch.ResultChan()),
-					watchDeploymentEvents(m.deploymentWatch.ResultChan()),
 				)
 			}
 			m.currentView = Pod
@@ -192,9 +195,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if pod, ok := podModel.(pods.Model); ok {
 				m.pod = pod
 			}
+			cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
 		default:
 		}
-		cmd = tea.Batch(cmd, watchPodEvents(m.watch.ResultChan()))
 	case deployments.ChangeMsg:
 		switch m.currentView {
 		case Deployment:
@@ -203,9 +206,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if dep, ok := depModel.(deployments.Model); ok {
 				m.deployment = dep
 			}
+			cmd = tea.Batch(cmd, watchDeploymentEvents(m.deploymentWatch.ResultChan()))
 		default:
 		}
-		cmd = tea.Batch(cmd, watchDeploymentEvents(m.deploymentWatch.ResultChan()))
 	case logs.NewLogMsg:
 		switch m.currentView {
 		case Log:
@@ -270,6 +273,7 @@ func (m *Model) updatePodView(msg tea.Msg, cmd *tea.Cmd) {
 		m.currentView = Namespace
 	case "d":
 		m.currentView = Deployment
+		*cmd = tea.Batch(*cmd, watchDeploymentEvents(m.deploymentWatch.ResultChan()))
 	case "enter":
 		m.log = logs.New(ctx.Background(), m.width, m.height)
 		go func() {
@@ -298,6 +302,7 @@ func (m *Model) updateLogView(msg tea.Msg, cmd *tea.Cmd) {
 	case "esc":
 		m.log.Stop()
 		m.currentView = Pod
+		*cmd = tea.Batch(*cmd, watchPodEvents(m.watch.ResultChan()))
 	default:
 		var logModel tea.Model
 		var c tea.Cmd
@@ -316,6 +321,7 @@ func (m *Model) updateContextView(msg tea.Msg, cmd *tea.Cmd) {
 	switch keypress {
 	case "esc":
 		m.currentView = Pod
+		*cmd = tea.Batch(*cmd, watchPodEvents(m.watch.ResultChan()))
 	case "enter":
 		ctxModel, c = m.context.Update(msg)
 		*cmd = c
@@ -336,6 +342,7 @@ func (m *Model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 	switch keypress {
 	case "esc":
 		m.currentView = Pod
+		*cmd = tea.Batch(*cmd, watchPodEvents(m.watch.ResultChan()))
 	case "enter":
 		m.watch.Stop()
 		m.deploymentWatch.Stop()
@@ -355,7 +362,6 @@ func (m *Model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 				*cmd = tea.Batch(
 					*cmd,
 					watchPodEvents(m.watch.ResultChan()),
-					watchDeploymentEvents(m.deploymentWatch.ResultChan()),
 				)
 			}
 			m.currentView = Pod
@@ -377,8 +383,10 @@ func (m *Model) updateDeploymentView(msg tea.Msg, cmd *tea.Cmd) {
 	switch keypress {
 	case "esc":
 		m.currentView = Pod
+		*cmd = tea.Batch(*cmd, watchPodEvents(m.watch.ResultChan()))
 	case "p":
 		m.currentView = Pod
+		*cmd = tea.Batch(*cmd, watchPodEvents(m.watch.ResultChan()))
 	case "c":
 		m.currentView = Context
 	case "n":
