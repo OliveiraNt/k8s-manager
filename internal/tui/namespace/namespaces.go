@@ -5,6 +5,7 @@ import (
 	"github.com/OliveiraNt/k8s-manager/internal/kubernetes"
 	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
+	"log"
 )
 
 type Model struct {
@@ -57,11 +58,14 @@ func buildNamespacesList() list.Model {
 	defer cancelFunc()
 	namespaces, err := kubernetes.GetNamespaces(ctx)
 	if err != nil {
-		panic(err.Error())
-	}
-	ns := namespaces
-	for _, n := range ns {
-		items = append(items, item{name: n.Name})
+		// Log the error but continue with a default namespace
+		log.Printf("[ERROR] Failed to get namespaces: %v", err)
+		items = append(items, item{name: "default"})
+	} else {
+		ns := namespaces
+		for _, n := range ns {
+			items = append(items, item{name: n.Name})
+		}
 	}
 	l := list.New(items, itemDelegate{}, defaultWidth, listHeight)
 	l.Title = "Select Namespace"

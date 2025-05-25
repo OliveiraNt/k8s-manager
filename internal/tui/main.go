@@ -3,6 +3,7 @@ package tui
 import (
 	ctx "context"
 	"fmt"
+	"github.com/OliveiraNt/k8s-manager/internal/errors"
 	"github.com/OliveiraNt/k8s-manager/internal/kubernetes"
 	"github.com/OliveiraNt/k8s-manager/internal/tui/context"
 	"github.com/OliveiraNt/k8s-manager/internal/tui/deployments"
@@ -38,6 +39,8 @@ type Model struct {
 	currentView     Views
 	width           int
 	height          int
+	error           *errors.AppError
+	showError       bool
 }
 
 func NewModel() Model {
@@ -54,19 +57,23 @@ func NewModel() Model {
 		pod:         pods.New(ns),
 		deployment:  deployments.New(ns),
 		namespace:   namespace.New(ns),
+		error:       nil,
+		showError:   false,
 	}
 
 	w, err := kubernetes.WatchPods(c, ns)
 	if err != nil {
-		panic(err)
+		m.handleError(errors.New("Failed to watch pods", errors.Error, err))
+	} else {
+		m.watch = w
 	}
-	m.watch = w
 
 	dw, err := kubernetes.WatchDeployments(c, ns)
 	if err != nil {
-		panic(err)
+		m.handleError(errors.New("Failed to watch deployments", errors.Error, err))
+	} else {
+		m.deploymentWatch = dw
 	}
-	m.deploymentWatch = dw
 	return m
 }
 
@@ -82,22 +89,26 @@ func watchDeploymentEvents(sub <-chan watch.Event) tea.Cmd {
 	}
 }
 
-func watchPods(ns string) watch.Interface {
+func watchPods(ns string, m Model) watch.Interface {
 	c, cancelFunc := ctx.WithCancel(ctx.Background())
 	defer cancelFunc()
 	w, err := kubernetes.WatchPods(c, ns)
 	if err != nil {
-		panic(err)
+		// Since we can't modify m, we'll just log the error
+		errors.New("Failed to watch pods", errors.Error, err)
+		return nil
 	}
 	return w
 }
 
-func watchDeployments(ns string) watch.Interface {
+func watchDeployments(ns string, m Model) watch.Interface {
 	c, cancelFunc := ctx.WithCancel(ctx.Background())
 	defer cancelFunc()
 	w, err := kubernetes.WatchDeployments(c, ns)
 	if err != nil {
-		panic(err)
+		// Since we can't modify m, we'll just log the error
+		errors.New("Failed to watch deployments", errors.Error, err)
+		return nil
 	}
 	return w
 }
@@ -117,6 +128,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		if keypress := keyMsg.String(); keypress == "q" || keypress == "ctrl+c" {
 			return m, tea.Quit
+		}
+
+		// If there's an error being displayed, clear it on any key press
+		if m.showError && m.error != nil {
+			m.clearError()
+			return m, cmd
 		}
 	}
 
@@ -156,13 +173,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.deployment.Namespace = ns
 			pods.RefreshPods(&m.pod, true)
 			deployments.RefreshDeployments(&m.deployment, true)
-			m.watch = watchPods(ns)
-			m.deploymentWatch = watchDeployments(ns)
-			cmd = tea.Batch(
-				cmd,
-				watchPodEvents(m.watch.ResultChan()),
-				watchDeploymentEvents(m.deploymentWatch.ResultChan()),
-			)
+			m.watch = watchPods(ns, m)
+			m.deploymentWatch = watchDeployments(ns, m)
+			if m.watch != nil && m.deploymentWatch != nil {
+				cmd = tea.Batch(
+					cmd,
+					watchPodEvents(m.watch.ResultChan()),
+					watchDeploymentEvents(m.deploymentWatch.ResultChan()),
+				)
+			}
 			m.currentView = Pod
 		}
 	case pods.ChangeMsg:
@@ -330,13 +349,15 @@ func (m *Model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 			m.deployment.Namespace = m.namespace.SelectedNamespace
 			pods.RefreshPods(&m.pod, true)
 			deployments.RefreshDeployments(&m.deployment, true)
-			m.watch = watchPods(m.namespace.SelectedNamespace)
-			m.deploymentWatch = watchDeployments(m.namespace.SelectedNamespace)
-			*cmd = tea.Batch(
-				*cmd,
-				watchPodEvents(m.watch.ResultChan()),
-				watchDeploymentEvents(m.deploymentWatch.ResultChan()),
-			)
+			m.watch = watchPods(m.namespace.SelectedNamespace, *m)
+			m.deploymentWatch = watchDeployments(m.namespace.SelectedNamespace, *m)
+			if m.watch != nil && m.deploymentWatch != nil {
+				*cmd = tea.Batch(
+					*cmd,
+					watchPodEvents(m.watch.ResultChan()),
+					watchDeploymentEvents(m.deploymentWatch.ResultChan()),
+				)
+			}
 			m.currentView = Pod
 		}
 
@@ -373,7 +394,50 @@ func (m *Model) updateDeploymentView(msg tea.Msg, cmd *tea.Cmd) {
 	}
 }
 
+// handleError sets the error state and shows the error
+func (m *Model) handleError(err *errors.AppError) {
+	m.error = err
+	m.showError = true
+
+	// If the error is fatal, we should exit the application
+	if err.Level == errors.Fatal {
+		panic(err) // Still panic for fatal errors
+	}
+}
+
+// clearError clears the error state
+func (m *Model) clearError() {
+	m.error = nil
+	m.showError = false
+}
+
+// errorView renders the error message
+func (m Model) errorView() string {
+	if m.error == nil {
+		return ""
+	}
+
+	var style lipgloss.Style
+	switch m.error.Level {
+	case errors.Info:
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("blue"))
+	case errors.Warning:
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("yellow"))
+	case errors.Error:
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("red"))
+	case errors.Fatal:
+		style = lipgloss.NewStyle().Foreground(lipgloss.Color("red")).Bold(true)
+	}
+
+	return "\n" + style.Render(fmt.Sprintf("Error: %s", m.error.String())) + "\n\nPress any key to continue..."
+}
+
 func (m Model) View() string {
+	// If there's an error and we're showing it, display the error view
+	if m.showError && m.error != nil {
+		return m.errorView()
+	}
+
 	var b strings.Builder
 	_, _ = fmt.Fprintf(&b, "CONTEXT: %s\n", m.context.SelectedContext.Name)
 	_, _ = fmt.Fprintf(&b, "NAMESPACE: %s\n", m.pod.Namespace)

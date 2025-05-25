@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"k8s.io/apimachinery/pkg/watch"
+	"log"
 )
 
 type Model struct {
@@ -51,17 +52,20 @@ func RefreshPods(m *Model, goTop bool) {
 	defer cancelFunc()
 	pds, err := kubernetes.GetPods(ctx, m.Namespace)
 	if err != nil {
-		panic(err)
-	}
-	for _, p := range pds {
-		row := table.Row{
-			p.Name,
-			kubernetes.ColumnHelperReady(p.Status.ContainerStatuses),
-			kubernetes.ColumnHelperStatus(p.Status),
-			kubernetes.ColumnHelperRestarts(p.Status.ContainerStatuses),
-			kubernetes.ColumnHelperAge(p.CreationTimestamp),
+		// Log the error but continue with empty rows
+		log.Printf("[ERROR] Failed to get pods: %v", err)
+		rows = []table.Row{{"Error loading pods", "", "", "", ""}}
+	} else {
+		for _, p := range pds {
+			row := table.Row{
+				p.Name,
+				kubernetes.ColumnHelperReady(p.Status.ContainerStatuses),
+				kubernetes.ColumnHelperStatus(p.Status),
+				kubernetes.ColumnHelperRestarts(p.Status.ContainerStatuses),
+				kubernetes.ColumnHelperAge(p.CreationTimestamp),
+			}
+			rows = append(rows, row)
 		}
-		rows = append(rows, row)
 	}
 	m.Pods.SetRows(rows)
 	if goTop {

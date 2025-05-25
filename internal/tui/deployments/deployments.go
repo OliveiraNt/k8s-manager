@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"k8s.io/apimachinery/pkg/watch"
+	"log"
 )
 
 type Model struct {
@@ -52,16 +53,19 @@ func RefreshDeployments(m *Model, goTop bool) {
 	defer cancelFunc()
 	deps, err := kubernetes.GetDeployments(ctx, m.Namespace)
 	if err != nil {
-		panic(err)
-	}
-	for _, d := range deps {
-		row := table.Row{
-			d.Name,
-			kubernetes.ColumnHelperReplicas(d.Status),
-			string(d.Status.Conditions[0].Type),
-			kubernetes.ColumnHelperAge(d.CreationTimestamp),
+		// Log the error but continue with empty rows
+		log.Printf("[ERROR] Failed to get deployments: %v", err)
+		rows = []table.Row{{"Error loading deployments", "", "", ""}}
+	} else {
+		for _, d := range deps {
+			row := table.Row{
+				d.Name,
+				kubernetes.ColumnHelperReplicas(d.Status),
+				string(d.Status.Conditions[0].Type),
+				kubernetes.ColumnHelperAge(d.CreationTimestamp),
+			}
+			rows = append(rows, row)
 		}
-		rows = append(rows, row)
 	}
 	m.Deployments.SetRows(rows)
 	if goTop {
