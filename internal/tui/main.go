@@ -47,23 +47,26 @@ func NewModel() Model {
 	}
 	c, cancelFunc := ctx.WithCancel(ctx.Background())
 	defer cancelFunc()
+
+	m := Model{
+		currentView: Pod,
+		context:     context.New(),
+		pod:         pods.New(ns),
+		deployment:  deployments.New(ns),
+		namespace:   namespace.New(ns),
+	}
+
 	w, err := kubernetes.WatchPods(c, ns)
 	if err != nil {
 		panic(err)
 	}
+	m.watch = w
+
 	dw, err := kubernetes.WatchDeployments(c, ns)
 	if err != nil {
 		panic(err)
 	}
-	m := Model{
-		currentView:     Pod,
-		context:         context.New(),
-		pod:             pods.New(ns),
-		deployment:      deployments.New(ns),
-		namespace:       namespace.New(ns),
-		watch:           w,
-		deploymentWatch: dw,
-	}
+	m.deploymentWatch = dw
 	return m
 }
 

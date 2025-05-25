@@ -50,6 +50,8 @@ func getClientSet() *kubernetes.Clientset {
 		panic(err)
 	}
 
+	cc.Timeout = time.Second * 5
+
 	// Create the client set
 	cs, err := kubernetes.NewForConfig(cc)
 	if err != nil {
@@ -114,7 +116,11 @@ func GetPods(ctx context.Context, namespace string) ([]v1.Pod, error) {
 func WatchPods(ctx context.Context, namespace string) (watch.Interface, error) {
 	cs := getClientSet()
 
-	w, err := cs.CoreV1().Pods(namespace).Watch(ctx, metav1.ListOptions{})
+	timeoutSeconds := int64(5)
+	options := metav1.ListOptions{
+		TimeoutSeconds: &timeoutSeconds,
+	}
+	w, err := cs.CoreV1().Pods(namespace).Watch(ctx, options)
 	if err != nil {
 		return nil, err
 	}
@@ -236,7 +242,11 @@ func GetDeployments(ctx context.Context, namespace string) ([]appsv1.Deployment,
 func WatchDeployments(ctx context.Context, namespace string) (watch.Interface, error) {
 	cs := getClientSet()
 
-	w, err := cs.AppsV1().Deployments(namespace).Watch(ctx, metav1.ListOptions{})
+	timeoutSeconds := int64(5)
+	options := metav1.ListOptions{
+		TimeoutSeconds: &timeoutSeconds,
+	}
+	w, err := cs.AppsV1().Deployments(namespace).Watch(ctx, options)
 	if err != nil {
 		return nil, err
 	}
