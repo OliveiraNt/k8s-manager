@@ -176,10 +176,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pod.Namespace = ns
 			m.deployment.Namespace = ns
 			pods.RefreshPods(&m.pod, true)
-			deployments.RefreshDeployments(&m.deployment, true)
 			m.watch = watchPods(ns, m)
-			m.deploymentWatch = watchDeployments(ns, m)
-			if m.watch != nil && m.deploymentWatch != nil {
+			if m.watch != nil {
 				cmd = tea.Batch(
 					cmd,
 					watchPodEvents(m.watch.ResultChan()),
