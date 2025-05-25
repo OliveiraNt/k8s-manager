@@ -89,24 +89,22 @@ func watchDeploymentEvents(sub <-chan watch.Event) tea.Cmd {
 	}
 }
 
-func watchPods(ns string, m Model) watch.Interface {
+func watchPods(ns string) watch.Interface {
 	c, cancelFunc := ctx.WithCancel(ctx.Background())
 	defer cancelFunc()
 	w, err := kubernetes.WatchPods(c, ns)
 	if err != nil {
-		// Since we can't modify m, we'll just log the error
 		errors.New("Failed to watch pods", errors.Error, err)
 		return nil
 	}
 	return w
 }
 
-func watchDeployments(ns string, m Model) watch.Interface {
+func watchDeployments(ns string) watch.Interface {
 	c, cancelFunc := ctx.WithCancel(ctx.Background())
 	defer cancelFunc()
 	w, err := kubernetes.WatchDeployments(c, ns)
 	if err != nil {
-		// Since we can't modify m, we'll just log the error
 		errors.New("Failed to watch deployments", errors.Error, err)
 		return nil
 	}
@@ -176,7 +174,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pod.Namespace = ns
 			m.deployment.Namespace = ns
 			pods.RefreshPods(&m.pod, true)
-			m.watch = watchPods(ns, m)
+			m.watch = watchPods(ns)
 			if m.watch != nil {
 				cmd = tea.Batch(
 					cmd,
@@ -354,8 +352,8 @@ func (m *Model) updateNamespaceView(msg tea.Msg, cmd *tea.Cmd) {
 			m.deployment.Namespace = m.namespace.SelectedNamespace
 			pods.RefreshPods(&m.pod, true)
 			deployments.RefreshDeployments(&m.deployment, true)
-			m.watch = watchPods(m.namespace.SelectedNamespace, *m)
-			m.deploymentWatch = watchDeployments(m.namespace.SelectedNamespace, *m)
+			m.watch = watchPods(m.namespace.SelectedNamespace)
+			m.deploymentWatch = watchDeployments(m.namespace.SelectedNamespace)
 			if m.watch != nil && m.deploymentWatch != nil {
 				*cmd = tea.Batch(
 					*cmd,
